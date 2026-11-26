@@ -1,0 +1,1 @@
+**I will write here my journey of solving prompts — what I faced, what I learned, and why I built it. I write all of it myself of course; I'm just using a text enhancer. The organic content is from me.**
