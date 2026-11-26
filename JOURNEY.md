@@ -33,3 +33,29 @@ This was mostly a planning day, but one thing became clear while thinking the ar
 ---
 
 *One small note: SQLite is a great choice here — but just so the reasoning is straight in your head, the "no company, so SQLite" logic is about scale and simplicity, not about SQLite being a lesser database. It will handle this project perfectly.*
+
+
+# Day Log — November 26, 2026, 11:45 PM
+
+## What I built today
+
+I started my new project, **QSRSU**. First prompt I gave to my coding agent — of course not writing the code by my hand, but understanding every line of it. This is the prompt I gave him:
+
+> We are in a project called QSRSU. Structure: `bot/main.py` (entry point), `bot/handlers.py` (message handlers), `bot/config.py` (loads `.env`), `.env` (`TELEGRAM_BOT_TOKEN`), `requirements.txt`. Use python-telegram-bot v21+ with async handlers. The bot echoes any text message back. Add a `.gitignore` for `.env`, `__pycache__`, `images/`.
+
+And then I told him:
+
+> Add a virtual environment (`venv`), activate it, and install the dependencies.
+
+## What I learned
+
+I hovered over what he did and stopped at every unknown concept until I understood it. Some of the ones I locked in today:
+
+- **The `Update` object** — this is the incoming message payload. It's what came from the user: the text, who sent it, whether it's a new message or an edit.
+- **The `Context` object** — different kind of data. Also given to the handler, but it's runtime stuff, not the user's message: the bot instance, the application.
+- **`async` / `await`** — this one took me a second. If we mark the function `async`, it means the function can pause and wait. But here's the part that clicked: the pause only happens at `await`. So in our case, when we hit `await reply_text(...)`, our function waits for Telegram's response — and meanwhile, other operations continue without being interrupted. The bot doesn't freeze; it just parks that one handler until the network answers.
+
+So the full picture: `update` = what happened, `context` = what I can do about it. And `async` without `await` is just a promise — nothing actually pauses until you use it.
+
+
+---
