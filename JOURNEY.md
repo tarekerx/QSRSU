@@ -1,4 +1,6 @@
-# I will write here my journey of solving prompts — what I faced, what I learned, and why I built it. I write all of it myself of course; I'm just using a text enhancer. The organic content is from me.
+# My Journey Solving Prompts
+
+I will write here my journey of solving prompts — what I faced, what I learned, and why I built it. I write all of it myself of course; I'm just using a text enhancer. The organic content is from me.
 
 # Day Log — November 26, 2026, 6:45 PM
 
@@ -27,7 +29,7 @@ And of course it is not as simple as I'm saying. A lot of problems will be faced
 
 This was mostly a planning day, but one thing became clear while thinking the architecture through: **match the tool to the job, not to the hype**. The describing step doesn't need a smart model — a local LLM on my own hardware is enough and costs nothing. The solving step is where the real reasoning is needed, and that's the only place worth spending an API key. Splitting the pipeline this way keeps the expensive part small.
 
-&gt; Don't give every step the biggest model. Give each step the smallest model that can actually do it.
+> Don't give every step the biggest model. Give each step the smallest model that can actually do it.
 
 ---
 
@@ -41,11 +43,11 @@ This was mostly a planning day, but one thing became clear while thinking the ar
 
 I started my new project, **QSRSU**. First prompt I gave to my coding agent — of course not writing the code by my hand, but understanding every line of it. This is the prompt I gave him:
 
-&gt; We are in a project called QSRSU. Structure: `bot/main.py` (entry point), `bot/handlers.py` (message handlers), `bot/config.py` (loads `.env`), `.env` (`TELEGRAM_BOT_TOKEN`), `requirements.txt`. Use python-telegram-bot v21+ with async handlers. The bot echoes any text message back. Add a `.gitignore` for `.env`, `__pycache__`, `images/`.
+> We are in a project called QSRSU. Structure: `bot/main.py` (entry point), `bot/handlers.py` (message handlers), `bot/config.py` (loads `.env`), `.env` (`TELEGRAM_BOT_TOKEN`), `requirements.txt`. Use python-telegram-bot v21+ with async handlers. The bot echoes any text message back. Add a `.gitignore` for `.env`, `__pycache__`, `images/`.
 
 And then I told him:
 
-&gt; Add a virtual environment (`venv`), activate it, and install the dependencies.
+> Add a virtual environment (`venv`), activate it, and install the dependencies.
 
 ## What I learned
 
@@ -56,7 +58,6 @@ I hovered over what he did and stopped at every unknown concept until I understo
 - **`async` / `await`** — this one took me a second. If we mark the function `async`, it means the function can pause and wait. But here's the part that clicked: the pause only happens at `await`. So in our case, when we hit `await reply_text(...)`, our function waits for Telegram's response — and meanwhile, other operations continue without being interrupted. The bot doesn't freeze; it just parks that one handler until the network answers.
 
 So the full picture: `update` = what happened, `context` = what I can do about it. And `async` without `await` is just a promise — nothing actually pauses until you use it.
-
 
 # Day Log — November 27, 2026
 
@@ -74,5 +75,3 @@ Added a SQLite database layer to my QSRSU project (Telegram bot for quiz grading
 Honestly — nothing special here. It was not new for me. The point of this step was not the SQL itself, it was **setting the structure deliberately**: plain `sqlite3` + a simple schema is enough for my current state, and later I could change it (upgrade to an ORM, add migrations, whatever) using the same logic without rewriting everything. Small steps, built on purpose.
 
 The `update_question(question_id, **fields)` pattern is also a nice flexible design — it lets me update any column by id without writing five separate update functions.
-
----
