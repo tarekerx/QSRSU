@@ -8,6 +8,13 @@ __pycache__/
 # Project images
 images/
 
+# SQLite database (local data, not source)
+qsrsu.db
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
 # Virtual environment
 venv/
 .venv/

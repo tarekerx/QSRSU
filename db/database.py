@@ -11,10 +11,8 @@ _ALLOWED_FIELDS = {
     "image_path",
     "question_text",
     "options",
-    "user_answer",
     "correct_answer",
     "explanation",
-    "is_correct",
     "created_at",
 }
 
@@ -38,10 +36,8 @@ def init_db() -> None:
                 image_path TEXT NOT NULL,
                 question_text TEXT,
                 options TEXT,
-                user_answer TEXT,
                 correct_answer TEXT,
                 explanation TEXT,
-                is_correct INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
