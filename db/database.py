@@ -113,3 +113,16 @@ def list_questions() -> list:
         return [dict(row) for row in rows]
     finally:
         conn.close()
+
+
+def delete_question(question_id: int) -> None:
+    """Delete a question by its id (used for rollback if file saving fails)."""
+    conn = _connect()
+    try:
+        conn.execute(
+            "DELETE FROM questions WHERE id = ?",
+            (question_id,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
