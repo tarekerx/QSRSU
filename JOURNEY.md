@@ -33,7 +33,7 @@ This was mostly a planning day, but one thing became clear while thinking the ar
 
 ---
 
-*One small note: SQLite is a great choice here — but just so the reasoning is straight in your head, the "no company, so SQLite" logic is about scale and simplicity, not about SQLite being a lesser database. It will handle this project perfectly.*
+_One small note: SQLite is a great choice here — but just so the reasoning is straight in your head, the "no company, so SQLite" logic is about scale and simplicity, not about SQLite being a lesser database. It will handle this project perfectly._
 
 ---
 
@@ -130,7 +130,7 @@ Nothing broke this time. The only "mistake" risk would have been trusting the mo
 
 Now to implement the transcription model — by far the hardest thing I will face in this project. I sent the prompt after some changes because I wanted to use my Ubuntu server for the small transcription model and use OpenVINO to optimize it. The prompt I passed:
 
-```
+````
 Continue the QSRSU project. Add an image transcription module using a local vision model — Qwen/Qwen3.5-4B served via OpenVINO GenAI (VLMPipeline, device "CPU"), running on my Ubuntu server. Do NOT use Ollama for this.
 
 Create ai/transcriber.py:
@@ -160,16 +160,120 @@ Important notes:
 - All DB access must go through the existing functions in db/database.py
 
 Keep the code minimal and well-commented — I'm learning and need to understand every part. Add short comments explaining why the JSON is validated instead of trusted directly, why the pipeline is loaded only once, and why options is json.dumps()'ed before storing.
-```
+````
 
 ## What I learned
 
-**Lazy imports.** I learned something called lazy import — you import a module when you need it inside the function, not at the top. In my case it was `openvino_genai`. The lazy import mattered for two reasons: the bot can import `ai.transcriber` even before `openvino-genai` is installed (which is exactly my current state — I'm installing the libraries right now), and the heavy OpenVINO library is only loaded into memory when transcription is first actually used, not at bot startup. *Correction to what I first thought: it's not really about "importing every time being a waste" — Python caches modules after the first import, so re-importing costs almost nothing. What must not repeat is not the import but the `VLMPipeline(...)` construction — that builds the model's inference graph and takes minutes on CPU, which is why the code keeps the pipeline in a `_pipeline` singleton loaded once and reused for every photo.*
+**Lazy imports.** I learned something called lazy import — you import a module when you need it inside the function, not at the top. In my case it was `openvino_genai`. The lazy import mattered for two reasons: the bot can import `ai.transcriber` even before `openvino-genai` is installed (which is exactly my current state — I'm installing the libraries right now), and the heavy OpenVINO library is only loaded into memory when transcription is first actually used, not at bot startup. _Correction to what I first thought: it's not really about "importing every time being a waste" — Python caches modules after the first import, so re-importing costs almost nothing. What must not repeat is not the import but the `VLMPipeline(...)` construction — that builds the model's inference graph and takes minutes on CPU, which is why the code keeps the pipeline in a `_pipeline` singleton loaded once and reused for every photo._
 
-**Layered error checking.** I learned that checking for errors or null/None depends on the layer — so checking in every layer is crucial, but each layer is checking a *different* thing. In `transcribe_question` there are two checks: "is this even valid JSON at all?" and "it's valid JSON, but does it have the right shape (`question_text`, `options` as a dict, etc.)?". Then the caller checks a third time: "did the whole transcription succeed or not?" The caller doesn't care *why* it failed — blurry photo, bad JSON, wrong shape, missing model — the answer is the same: "ask for a clearer image." Detail at the inner layers, yes/no at the outer one.
+**Layered error checking.** I learned that checking for errors or null/None depends on the layer — so checking in every layer is crucial, but each layer is checking a _different_ thing. In `transcribe_question` there are two checks: "is this even valid JSON at all?" and "it's valid JSON, but does it have the right shape (`question_text`, `options` as a dict, etc.)?". Then the caller checks a third time: "did the whole transcription succeed or not?" The caller doesn't care _why_ it failed — blurry photo, bad JSON, wrong shape, missing model — the answer is the same: "ask for a clearer image." Detail at the inner layers, yes/no at the outer one.
 
 ## What went wrong
 
 Nothing broke yet — but the model isn't even fully installed on the server at this point, so nothing has really been tested. The first real photo through the VLM is still ahead, and I expect the hardest bugs to show up there.
 
 ---
+
+# Day Log — November 27, 2026, 8:30 PM
+
+## What I built today
+
+My quiz-grader bot (Telegram bot → photo → transcription → solve → grade) now has a working transcriber. Sooner than I expected, an error appeared — but it wasn't a real error in my code. It was the **unavailability of installing such a good model for transcribing the images** locally. The local Qwen/Qwen3.5-4B via OpenVINO plan on my Ubuntu server didn't work out.
+
+So I went to plan B: using a free API key like Groq, and using a high-limit model only for description/transcription. And that worked fine.
+
+## What went wrong
+
+- Tried to run the transcription with a local vision model (`Qwen/Qwen3.5-4B` served via `openvino_genai.VLMPipeline`, device `"CPU"`). Getting a model like that installed and usable locally was the blocker — not my code.
+- I also ended up with **unwanted libraries installed** from the first attempt at the local model, which I uninstalled afterwards.
+
+The prompt I gave the AI for the local-model attempt was:
+
+````text
+Continue the QSRSU project. Add an image transcription module using a local vision model — Qwen/Qwen3.5-4B served via OpenVINO GenAI (VLMPipeline, device "CPU"), running on my Ubuntu server. Do NOT use Ollama for this.
+
+Create ai/transcriber.py:
+- Function transcribe_question(image_path: str) -> dict | None
+- Uses openvino_genai.VLMPipeline, loaded ONCE at module level (or a small loader function with caching — do NOT reload the model on every photo, it takes minutes on CPU)
+- Model path and device from bot/config.py: VLM_MODEL_PATH from .env, VLM_DEVICE default "CPU"
+- Call the pipeline with the image and a prompt that asks for STRICT JSON only, no markdown fences, no explanation, with exactly these keys:
+  {
+    "question_text": "<the question text as written>",
+    "options": {"A": "...", "B": "..."},
+    "user_answer": "<the user's marked answer as a letter, or null if none>"
+  }
+- Parse the response:
+  - Strip any leading/trailing whitespace and possible ```json fences
+  - json.loads() the result
+  - Validate: question_text must be a non-empty string, options must be a dict of letter->string, user_answer must be a string or None
+  - If parsing or validation fails, return None (do NOT raise)
+- check_vlm() -> bool that verifies the model directory exists and the pipeline can be constructed; call it once at bot startup in bot/main.py and log a warning if it fails
+
+Wire it into the bot photo flow (bot/photo_handler.py):
+- After the image is saved, call transcribe_question(image_path)
+- On success: update_question(question_id, question_text=..., options=json.dumps(options), user_answer=...) — store options as a JSON string, remember the column is TEXT
+- On failure (None): leave the row as-is and reply to the user: "Couldn't read the question from this photo. Try a clearer image."
+
+Important notes:
+- Load the VLMPipeline lazily or at startup, but never per-request — model loading on CPU is slow
+- All DB access must go through the existing functions in db/database.py
+
+Keep the code minimal and well-commented — I'm learning and need to understand every part. Add short comments explaining why the JSON is validated instead of trusted directly, why the pipeline is loaded only once, and why options is json.dumps()'ed before storing.
+````
+
+## What I learned
+
+> OpenVINO uses **paths** better, especially when it's local. But for the new case of a cloud LLM, I would use an **API key** for sending requests.
+
+The mental model that finally clicked:
+
+- **Local model** = a folder of weight files on your own disk. There is no server, no account, no one to authenticate against — so the program needs a _path_ to the model files, and the inference library loads them directly.
+- **Cloud LLM** = someone else's datacenter doing the work. The API key is how they know it's you and meter your usage. You send the request over HTTP; you never see the weights.
+
+The failed local attempt wasn't wasted time — it taught me exactly when each pattern applies. And when the architecture changed (self-hosted inference → managed inference), the key became the natural way in.
+
+# Day Log — November 27, 2026, 9:10 PM
+
+## What I built today
+
+On to the next phase: the **solver**. Simple approach — add the Gemini API key, request the AI to solve the questions, then update the row of the question to include the explanation and the answer. The answer kept as a little answer, not letters, for the journeys(?), and the response of the AI was standardized.
+
+## What went wrong
+
+When I reviewed the AI's code, I found the row update was **inside `solver.py`** — which at first is only meant to be for solving, not updating. That can catch errors or update hard (a failed or hidden DB write inside the solver makes failures hard to diagnose, and mixing solving with saving makes the function hard to test). So I requested another prompt from my planner, and here it comes — the careful review. The two prompts:
+
+**Prompt 1 — build the solver (phase 4):**
+
+````text
+Build phase 4: ai/solver.py — the answering/grading step of the quiz-grader Telegram bot. Do not modify the transcriber or the photo handler's logic.
+Context: ai/transcriber.py already extracts {"question_text", "options", "user_answer"} from each quiz photo and saves it to the SQLite questions row. Now the bot must solve the question, grade the student's marked answer, and reply in Telegram.
+Requirements:
+Create ai/solver.py using Google's google-genai SDK (add GEMINI_API_KEY to .env, loaded in bot/config.py like the other secrets). Model: gemini-2.5-flash. Create the client once at module level, not per request. Verify the key exists at startup; print a clear error and exit if missing.
+Function signature: solve_and_grade(question_id: int) -> dict | None — it loads the question row from the DB (reuse the existing get_question() from db/database.py), sends ONLY the text fields (question_text, options) to Gemini — never the image — and asks it to return ONLY a JSON object with this exact schema: {"correct_answer": str, "explanation": str}.
+Strict parsing: extract the JSON block (handle a leading ```json fence), json.loads it, validate correct_answer is a non-empty string and explanation is a string. Retry the API call once on parse failure, then return None on second failure.
+In Python (not in the prompt), compare correct_answer against the row's user_answer: case-insensitive, ignore surrounding whitespace; set is_correct = True if they match, else False. Handle the case where user_answer is empty (nothing marked) — grade it as incorrect.
+Update the DB row with correct_answer, explanation, and is_correct using the existing update_question().
+Wire it into the bot flow: after the transcriber successfully fills the row (existing code), call solve_and_grade(question_id), then send the user a Telegram reply in this format:
+✅ Correct! (or ❌ Wrong. The correct answer is: X)
+Explanation: <explanation>
+If solving returned None, reply: "Couldn't solve this one — try a clearer photo." and leave the row unsolved.
+Error handling: any API or network failure returns None (same fallback reply). Never crash the handler.
+Keep the code minimal and commented — add short comments in ai/solver.py explaining how the google-genai SDK call works and why the model only receives text (the user is learning and needs to understand every part).
+````
+
+**Prompt 2 — the refactor after my review:**
+
+```text
+Refactor the solver/DB-write split in the quiz-grader bot:
+In ai/solver.py: remove the update_question call (and its import). solve_and_grade(question_id) should now only read the row, solve, grade, and return {"correct_answer", "explanation", "is_correct"} or None. Add a comment noting the function is side-effect-free by design: no DB writes, so it can be unit tested and reused anywhere.
+In bot/handlers.py (photo handler): after solve_and_grade() returns a non-None dict, call update_question(question_id, correct_answer=..., explanation=..., is_correct=1 if result["is_correct"] else 0) and then send the Telegram ✅/❌ + explanation reply. If it returns None, send the existing fallback reply ("Couldn't solve this one — try a clearer photo.") and do NOT touch the DB row.
+Wrap the update_question call in its own try/except: if the DB write fails, log it and still attempt to send the user the answer reply (solving worked; the user shouldn't lose the result because of a save hiccup).
+Update the function docstring in solver.py to state it does not write to the DB.
+Keep the code minimal and commented — the user is learning and needs to understand every part.
+```
+
+## What I learned
+
+> Review the code the AI gives you — don't just run it. The first version worked, but the DB write living inside the solver blurred the line between _solving_ and _saving_. Splitting them means each failure mode is explicit, and the solver becomes a pure function I can unit test without touching the database.
+
+This is the second time this week the fix wasn't "make the code work" but "make the code _honest_" — clear about what it does, where it writes, and what fails when.
