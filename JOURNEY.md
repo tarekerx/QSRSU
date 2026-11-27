@@ -75,3 +75,5 @@ Added a SQLite database layer to my QSRSU project (Telegram bot for quiz grading
 Honestly — nothing special here. It was not new for me. The point of this step was not the SQL itself, it was **setting the structure deliberately**: plain `sqlite3` + a simple schema is enough for my current state, and later I could change it (upgrade to an ORM, add migrations, whatever) using the same logic without rewriting everything. Small steps, built on purpose.
 
 The `update_question(question_id, **fields)` pattern is also a nice flexible design — it lets me update any column by id without writing five separate update functions.
+
+---
