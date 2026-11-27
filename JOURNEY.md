@@ -56,3 +56,23 @@ I hovered over what he did and stopped at every unknown concept until I understo
 - **`async` / `await`** — this one took me a second. If we mark the function `async`, it means the function can pause and wait. But here's the part that clicked: the pause only happens at `await`. So in our case, when we hit `await reply_text(...)`, our function waits for Telegram's response — and meanwhile, other operations continue without being interrupted. The bot doesn't freeze; it just parks that one handler until the network answers.
 
 So the full picture: `update` = what happened, `context` = what I can do about it. And `async` without `await` is just a promise — nothing actually pauses until you use it.
+
+
+# Day Log — November 27, 2026
+
+## What I built today
+
+Added a SQLite database layer to my QSRSU project (Telegram bot for quiz grading). The prompt I passed:
+
+- Created `db/database.py` using the built-in `sqlite3` module — **no ORM**, deliberately
+- Table `questions` with exactly these columns: `id` INTEGER PRIMARY KEY AUTOINCREMENT, `telegram_user_id`, `image_path`, `question_text`, `options` (a JSON string like `{"A": "...", "B": "..."}`), `user_answer`, `correct_answer`, `explanation`, `is_correct` (NULL / 0 / 1), `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+- Wrote the functions: `init_db()` (creates the table if it doesn't exist, called once at bot startup), `create_question(telegram_user_id, image_path) -> int`, `update_question(question_id, **fields)`, `get_question(question_id)`, `list_questions()` — all using **parameterized queries only**, never string formatting for SQL values
+- Wired `init_db()` into `bot/main.py` so the database is ready **before polling starts**
+
+## What I learned
+
+Honestly — nothing special here. It was not new for me. The point of this step was not the SQL itself, it was **setting the structure deliberately**: plain `sqlite3` + a simple schema is enough for my current state, and later I could change it (upgrade to an ORM, add migrations, whatever) using the same logic without rewriting everything. Small steps, built on purpose.
+
+The `update_question(question_id, **fields)` pattern is also a nice flexible design — it lets me update any column by id without writing five separate update functions.
+
+---
